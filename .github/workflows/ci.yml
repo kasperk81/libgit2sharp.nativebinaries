@@ -34,11 +34,15 @@ jobs:
           - os: ubuntu-24.04
             name: linux-ppc64le
           - os: ubuntu-24.04
+            name: linux-riscv64
+          - os: ubuntu-24.04
             name: linux-musl-x64
           - os: ubuntu-24.04
             name: linux-musl-arm
           - os: ubuntu-24.04
             name: linux-musl-arm64
+          - os: ubuntu-24.04
+            name: linux-musl-riscv64
           - os: macos-14
             name: osx-x64
           - os: macos-14
@@ -55,9 +59,6 @@ jobs:
       - name: Build macOS
         if: runner.os == 'macOS'
         run: ./build.libgit2.sh
-      - name: Setup QEMU
-        if: matrix.name == 'linux-musl-arm' || matrix.name == 'linux-musl-arm64'
-        run: docker run --rm --privileged multiarch/qemu-user-static:register --reset
       - name: Build Linux
         if: runner.os == 'Linux'
         run: ./dockerbuild.sh

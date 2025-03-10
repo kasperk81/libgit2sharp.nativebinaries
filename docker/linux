@@ -1,9 +1,42 @@
-FROM kmturley/crossbuild
-ARG ARCH='amd64'
-ENV CROSS_TRIPLE=${ARCH}
-RUN apt update && apt -y install pkg-config
+FROM ubuntu:24.04
+ARG ARCH=amd64
+ARG IS_MUSL=false
+
+# 1. Install common host utilities
+RUN apt-get update && apt-get install -y \
+    build-essential cmake git pkg-config wget xz-utils
+
+# 2. Setup GLIBC Cross-Compilers (if not musl)
+RUN if [ "$IS_MUSL" = "false" ]; then \
+        if [ "$ARCH" = "arm64" ]; then apt-get install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu && echo "CC=aarch64-linux-gnu-gcc\nCXX=aarch64-linux-gnu-g++" >> /env_vars; \
+        elif [ "$ARCH" = "armhf" ]; then apt-get install -y gcc-arm-linux-gnueabihf g++-arm-linux-gnueabihf && echo "CC=arm-linux-gnueabihf-gcc\nCXX=arm-linux-gnueabihf-g++" >> /env_vars; \
+        elif [ "$ARCH" = "powerpc64le" ]; then apt-get install -y gcc-powerpc64le-linux-gnu g++-powerpc64le-linux-gnu && echo "CC=powerpc64le-linux-gnu-gcc\nCXX=powerpc64le-linux-gnu-g++" >> /env_vars; \
+        elif [ "$ARCH" = "riscv64" ]; then apt-get install -y gcc-riscv64-linux-gnu g++-riscv64-linux-gnu && echo "CC=riscv64-linux-gnu-gcc\nCXX=riscv64-linux-gnu-g++" >> /env_vars; \
+        else echo "CC=gcc\nCXX=g++" >> /env_vars; fi \
+    fi
+
+# 3. Setup MUSL Cross-Compilers via Dyne.org mirror (if musl)
+RUN if [ "$IS_MUSL" = "true" ]; then \
+        if [ "$ARCH" = "arm64" ]; then FILE_NAME="dyne-gcc-musl-arm_64.tar.xz" && BIN_PREFIX="aarch64-linux-musl"; \
+        elif [ "$ARCH" = "armhf" ]; then FILE_NAME="dyne-gcc-musl-arm_hf.tar.xz" && BIN_PREFIX="arm-linux-musleabihf"; \
+        elif [ "$ARCH" = "riscv64" ]; then FILE_NAME="dyne-gcc-musl-riscv_64.tar.xz" && BIN_PREFIX="riscv64-linux-musl"; \
+        else FILE_NAME="dyne-gcc-musl-x86_64.tar.xz" && BIN_PREFIX="x86_64-linux-musl"; fi && \
+        mkdir -p /opt/musl-cross && \
+        wget "https://files.dyne.org/musl/${FILE_NAME}" && \
+        tar -xJf ${FILE_NAME} -C /opt/musl-cross --strip-components=1 && \
+        rm ${FILE_NAME} && \
+        echo "CC=/opt/musl-cross/gcc-musl/bin/${BIN_PREFIX}-gcc" >> /env_vars && \
+        echo "CXX=/opt/musl-cross/gcc-musl/bin/${BIN_PREFIX}-g++" >> /env_vars && \
+        echo "AR=/opt/musl-cross/gcc-musl/bin/${BIN_PREFIX}-ar" >> /env_vars && \
+        echo "AS=/opt/musl-cross/gcc-musl/bin/${BIN_PREFIX}-as" >> /env_vars && \
+        echo "CFLAGS=-I/opt/musl-cross/gcc-musl/${BIN_PREFIX}/include" >> /env_vars && \
+        echo "CXXFLAGS=-I/opt/musl-cross/gcc-musl/${BIN_PREFIX}/include" >> /env_vars && \
+        echo "LDFLAGS=-L/opt/musl-cross/gcc-musl/${BIN_PREFIX}/lib" >> /env_vars && \
+        echo "PKG_CONFIG_PATH=/opt/musl-cross/gcc-musl/${BIN_PREFIX}/lib/pkgconfig" >> /env_vars; \
+    fi
 
 WORKDIR /nativebinaries
 COPY . /nativebinaries/
 
-CMD ["/bin/bash", "-c", "./build.libgit2.sh"]
+# Inject environmental paths dynamically to run the libgit2 build script natively
+CMD ["/bin/bash", "-c", "export $(cat /env_vars | xargs) && ./build.libgit2.sh"]
