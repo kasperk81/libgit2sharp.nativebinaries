@@ -14,9 +14,9 @@ else
 fi
 
 if [[ $RID == linux-musl* ]]; then
-    dockerfile="Dockerfile.linux-musl"
+    dockerfile="docker/musl"
 else
-    dockerfile="Dockerfile.linux"
+    dockerfile="docker/linux"
 fi
 
 docker buildx build -t $RID -f $dockerfile --build-arg ARCH=$arch .
